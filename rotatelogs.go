@@ -6,7 +6,6 @@ package rotatelogs
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -109,14 +108,61 @@ func (rl *RotateLogs) Write(p []byte) (n int, err error) {
 
 	out, err := rl.getWriterNolock(false, false)
 	if err != nil {
-		return 0, errors.Wrap(err, `failed to acquite target io.Writer`)
+		return 0, errors.Wrap(err, `failed to acquite target *os.File`)
 	}
 
 	return out.Write(p)
 }
 
+func (rl *RotateLogs) WriteAt(b []byte, off int64) (n int, err error) {
+	rl.mutex.Lock()
+	defer rl.mutex.Unlock()
+
+	out, err := rl.getWriterNolock(false, false)
+	if err != nil {
+		err = errors.Wrap(err, `failed to acquite target *os.File`)
+		return
+	}
+	return out.WriteAt(b, off)
+}
+
+func (rl *RotateLogs) WriteString(s string) (n int, err error) {
+	rl.mutex.Lock()
+	defer rl.mutex.Unlock()
+
+	out, err := rl.getWriterNolock(false, false)
+	if err != nil {
+		err = errors.Wrap(err, `failed to acquite target *os.File`)
+		return
+	}
+	return out.WriteString(s)
+}
+
+func (rl *RotateLogs) Seek(offset int64, whence int) (ret int64, err error) {
+	rl.mutex.Lock()
+	defer rl.mutex.Unlock()
+
+	out, err := rl.getWriterNolock(false, false)
+	if err != nil {
+		err = errors.Wrap(err, `failed to acquite target *os.File`)
+		return
+	}
+	return out.Seek(offset, whence)
+}
+
+func (rl *RotateLogs) Sync() error {
+	rl.mutex.Lock()
+	defer rl.mutex.Unlock()
+
+	out, err := rl.getWriterNolock(false, false)
+	if err != nil {
+		return errors.Wrap(err, `failed to acquite target *os.File`)
+	}
+	return out.Sync()
+}
+
 // must be locked during this operation
-func (rl *RotateLogs) getWriterNolock(bailOnRotateFail, useGenerationalNames bool) (io.Writer, error) {
+func (rl *RotateLogs) getWriterNolock(bailOnRotateFail, useGenerationalNames bool) (*os.File, error) {
 	generation := rl.generation
 	previousFn := rl.curFn
 
